@@ -11,17 +11,35 @@ const app = express();
 const dataCollections = {
   armors: "armor",
   arrows: "arrow",
+  bolts: "bolt",
+  missiles: "missile",
+  bombs: "bomb",
+  shields: "shield",
   buildings: "piece",
   creatures: "creature",
   effects: "effect",
-  fish: "fish",
+  fishes: "fish",
   objects: "object",
   resources: "item",
   spawners: "spawner",
   tools: "tool",
   ships: "ship",
   sieges: "siege",
+  carts: "cart",
   weapons: "weapon",
+};
+
+const Biomes = {
+  0: "Meadows",
+  1: "Meadows",
+  2: "BlackForest",
+  3: "Swamp",
+  4: "Mountain",
+  5: "Plains",
+  6: "Mistlands",
+  7: "Ashlands",
+  8: "Ocean",
+  9: "DeepNorth",
 };
 
 app.use("/public", express.static(path.join(import.meta.dirname, "../public")));
@@ -54,22 +72,81 @@ const getItemsByType = (type) => {
     }, {});
 };
 
-app.get("/api/items/:itemId", (req, res) => {
+app.get("/api/items/:itemId", async (req, res) => {
   const { itemId } = req.params;
+
+  const enLang = await loadJsonFile("public/lang/en.json");
+
+  if (!enLang) {
+    throw new Error("Language files could not be loaded");
+  }
 
   const item = Items[itemId];
 
   if (item) {
     const recipe = Recipes.find((recipe) => recipe.item === itemId);
 
+    const iconUrl = await getIconPath(req, item.type, item.iconId || itemId);
+
     res.json({
-      item,
+      item: {
+        ...item,
+        name: enLang[itemId] || item.name || itemId,
+        icon: iconUrl,
+      },
       recipe: recipe || null,
     });
   } else {
     res.status(404).json({ error: "Item not found" });
   }
 });
+
+const getBiomes = (item) => {
+  let biomes = [];
+
+  item.spawners
+    ? item.spawners.forEach((spawner) => {
+        biomes = [...new Set([...biomes, ...spawner.biomes])];
+      })
+    : item.grow
+    ? item.grow.forEach((grow) => {
+        biomes = [...new Set([...biomes, ...grow.locations])];
+      })
+    : item.Plant
+    ? (biomes = biomes = [...new Set([...biomes, ...item.Plant.biomes])])
+    : (biomes = []);
+
+  if (biomes.length === 0) {
+    let highestBiome = -1;
+    const recipe = Recipes.find((recipe) => recipe.item === item.id);
+
+    if (recipe) {
+      for (let key in recipe.materials) {
+        const material = Items[key];
+
+        if (material) {
+          highestBiome =
+            highestBiome < material.tier ? material.tier : highestBiome;
+        }
+      }
+
+      if (highestBiome !== -1) {
+        biomes = [Biomes[highestBiome]];
+      }
+    } else {
+      item.tier ? (biomes = [Biomes[item.tier]]) : (biomes = []);
+    }
+  }
+  return biomes;
+};
+
+const getStation = (item) => {
+  if (item.recipe) return item.recipe.station;
+
+  const recipe = Recipes.find((recipe) => recipe.item === item.id);
+
+  return recipe && recipe.source ? recipe.source.station : "";
+};
 
 app.get("/api/items", async (req, res) => {
   try {
@@ -87,6 +164,10 @@ app.get("/api/items", async (req, res) => {
           itemData.iconId || itemId
         );
 
+        const biomes = getBiomes(itemData);
+        const group = itemData.group ? itemData.group : "";
+        const station = getStation(itemData);
+
         return {
           id: itemId,
           name: enLang[itemId] || itemData.name || itemId,
@@ -94,6 +175,9 @@ app.get("/api/items", async (req, res) => {
           type: itemData.type,
           icon: iconUrl,
           tier: itemData.tier,
+          biomes: biomes,
+          group: group,
+          station: station,
         };
       })
     );
