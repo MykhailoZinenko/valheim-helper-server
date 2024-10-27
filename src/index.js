@@ -3,9 +3,27 @@ import path from "path";
 import fs from "fs/promises";
 import cors from "cors";
 import compression from "compression";
+import { Telegraf } from "telegraf";
+import bodyParser from "body-parser";
 
 import { items as Items } from "./items.js";
 import { recipes as Recipes } from "./recipes.js";
+
+const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN);
+const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
+
+const formatFeedbackMessage = (feedback) => {
+  return `
+🔔 New Feedback Received
+
+👤 User: ${feedback.name}
+📧 Email: ${feedback.email}
+📝 Type: ${feedback.issueType}
+
+💬 Message:
+${feedback.description}
+`;
+};
 
 const app = express();
 
@@ -44,6 +62,7 @@ const Biomes = {
 };
 
 app.use(compression());
+app.use(bodyParser.json());
 
 app.use("/public", express.static(path.join(import.meta.dirname, "../public")));
 app.use(cors());
@@ -53,6 +72,54 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
 });
+
+app.post("/api/feedback", async (req, res) => {
+  try {
+    const { name, email, issueType, description } = req.body;
+
+    if (!name || !email || !issueType || !description) {
+      return res.status(400).json({
+        success: false,
+        message: "Missing required fields",
+      });
+    }
+
+    const message = formatFeedbackMessage({
+      name,
+      email,
+      issueType,
+      description,
+    });
+
+    await bot.telegram.sendMessage(TELEGRAM_CHAT_ID, message, {
+      parse_mode: "HTML",
+      disable_web_page_preview: true,
+    });
+
+    res.status(200).json({
+      success: true,
+      message: "Feedback sent successfully",
+    });
+  } catch (error) {
+    console.error("Feedback error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to send feedback",
+    });
+  }
+});
+
+bot.command("start", (ctx) => {
+  ctx.reply("Bot is active and ready to receive feedback!");
+});
+
+bot
+  .launch()
+  .then(() => console.log("Telegram bot started"))
+  .catch((err) => console.error("Failed to start Telegram bot:", err));
+
+process.once("SIGINT", () => bot.stop("SIGINT"));
+process.once("SIGTERM", () => bot.stop("SIGTERM"));
 
 app.get("/", (req, res) => {
   res.json({
