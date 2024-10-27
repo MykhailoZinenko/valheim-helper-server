@@ -2,6 +2,7 @@ import express from "express";
 import path from "path";
 import fs from "fs/promises";
 import cors from "cors";
+import compression from "compression";
 
 import { items as Items } from "./items.js";
 import { recipes as Recipes } from "./recipes.js";
@@ -41,6 +42,8 @@ const Biomes = {
   8: "Ocean",
   9: "DeepNorth",
 };
+
+app.use(compression());
 
 app.use("/public", express.static(path.join(import.meta.dirname, "../public")));
 app.use(cors());
