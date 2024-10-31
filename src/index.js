@@ -61,6 +61,26 @@ const Biomes = {
   9: "DeepNorth",
 };
 
+const BiomeDescriptions = {
+  Meadows:
+    "Starting biome of new worlds filled with Birch, Beech, and Oak trees which is inhabited by low level mobs.",
+  BlackForest:
+    "Dark and hostile forest of Fir and Pine trees with more resources, including Core wood, Tin, and Copper.",
+  Swamp:
+    "Dangerous, shadowy area with shallow water full of Leeches, Crypts filled with Draugrs, and poisonous Blobs.",
+  Mountain:
+    "Tall frozen mountains teeming with Wolves and flying Drakes that resist the biome's biting cold.",
+  Plains:
+    "Warm sunny area with golden grass and killer bugs. Home to the Fuling clan, Lox and Deathsquitoes.",
+  Mistlands:
+    "A fog-covered land with rocky terrain and Yggdrasil shoots, inhabited by Hares, Dvergrs and hostile insects such as Seekers.",
+  Ashlands:
+    "A fiery realm, the terrain changes the more inland one travels, with central parts taken up by lava. The undead army of Charred make up most of the population.",
+  Ocean:
+    "Found off the coast in deep waters. Home to Leviathans and Sea Serpents.",
+  DeepNorth: "Deep North biome of fir and pine trees with low level mobs.",
+};
+
 app.use(compression());
 app.use(bodyParser.json());
 
@@ -262,6 +282,72 @@ app.get("/api/items", async (req, res) => {
   }
 });
 
+app.get("/api/biomes", async (req, res) => {
+  try {
+    const enLang = await loadJsonFile("public/lang/en.json");
+
+    if (!enLang) {
+      throw new Error("Language files could not be loaded");
+    }
+
+    const biomeData = await Promise.all(
+      Object.entries(Biomes)
+        .slice(1, 8)
+        .map(async ([biomeId, biomeName]) => {
+          const bosses = [];
+
+          for (let key in Items) {
+            const item = Items[key];
+
+            if (item.id === "undefined") console.log("und", item);
+
+            const biomes = getBiomes(item);
+            if (biomes.includes(biomeName)) {
+              const iconUrl = await getIconPath(
+                req,
+                item.type,
+                item.iconId || item.id
+              );
+
+              if (item.faction === "Boss" || item.group === "semiboss") {
+                bosses.push({
+                  id: item.id,
+                  name: enLang[item.id] || item.name || item.id,
+                  icon: iconUrl,
+                });
+              }
+            }
+          }
+
+          const imageUrl = `${getBaseUrl(
+            req
+          )}/public/icons/bg/${biomeName}.webp`;
+
+          return {
+            name: biomeName,
+            description:
+              BiomeDescriptions[biomeName] || "Description not available",
+            bosses:
+              biomeName === "Plains"
+                ? bosses.slice(2)
+                : biomeName === "BlackForest"
+                ? bosses.slice(0, 2)
+                : bosses,
+            imageUrl,
+          };
+        })
+    );
+
+    res.json({
+      total: biomeData.length,
+      biomes: biomeData,
+    });
+  } catch (error) {
+    console.error("Error fetching biomes:", error);
+    res.status(500).json({ error: "Failed to fetch biomes" });
+  }
+});
+
 app.get("/api/:type", (req, res) => {
   const { type } = req.params;
 
@@ -308,6 +394,8 @@ async function getIconPath(req, type, iconId) {
     ? "creature"
     : ["shield", "bomb"].includes(type)
     ? "weapon"
+    : type == "item"
+    ? "resource"
     : type;
 
   const baseIconPath = iconId.includes("/")
