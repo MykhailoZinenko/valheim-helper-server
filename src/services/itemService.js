@@ -4,11 +4,12 @@ import { Biomes, dataCollections } from "../config/constants.js";
 import { loadJsonFile, getIconPath } from "../utils/fileUtils.js";
 
 export class ItemService {
-  static getBiomes(item) {
+  static getBiomes(item, initial = false) {
     let biomes = [];
 
     if (item.spawners) {
       item.spawners.forEach((spawner) => {
+        if (initial && spawner.killed) return biomes;
         biomes = [...new Set([...biomes, ...spawner.biomes])];
       });
     } else if (item.grow) {
@@ -34,7 +35,7 @@ export class ItemService {
         if (highestBiome !== -1) {
           biomes = [Biomes[highestBiome]];
         }
-      } else if (item.tier) {
+      } else if (item.tier !== undefined) {
         biomes = [Biomes[item.tier]];
       }
     }
@@ -54,6 +55,7 @@ export class ItemService {
     }
 
     const item = Items[itemId];
+
     if (!item || item?.mod) return null;
 
     const recipe = Recipes.find((recipe) => recipe.item === itemId);
@@ -174,12 +176,30 @@ export class ItemService {
         return acc;
       }, {});
 
-    console.log(itemsList);
-
     return {
       type,
       typeIdentifier,
       itemsList,
+    };
+  }
+
+  static async getItemsByBiome(biome, initial = false) {
+    const biomeItems = Object.entries(Items)
+      .filter(([_, item]) => {
+        const biomes = this.getBiomes(item, initial);
+
+        if (!biomes || !biomes.length > 0) return false;
+
+        return (biomes ?? []).includes(biome) && !item.mod;
+      })
+      .reduce((acc, [id, item]) => {
+        acc[id] = item;
+        return acc;
+      }, {});
+
+    return {
+      biome,
+      biomeItems,
     };
   }
 }

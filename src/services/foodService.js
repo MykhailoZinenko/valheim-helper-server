@@ -3,10 +3,18 @@ import { recipes as Recipes } from "../../recipes.js";
 import { ItemService } from "./itemService.js";
 
 export class FoodService {
-  static async getFoodData(req) {
+  static async getFoodData(req, params = {}) {
+    const { type, biome } = params;
+
     const foodList = await Promise.all(
       Object.entries(Items)
-        .filter(([_, item]) => item.Food && !item.mod)
+        .filter(([_, item]) => {
+          const matchesType = type ? item.type === type : true;
+          const matchesBiome = biome
+            ? ItemService.getBiomes(item).includes(biome)
+            : true;
+          return item.Food && !item.mod && matchesType && matchesBiome;
+        })
         .map(async ([itemId, itemData]) => {
           const foodItem = await ItemService.getItemDetails(itemId, req);
 

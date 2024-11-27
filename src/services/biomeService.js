@@ -1,6 +1,7 @@
 import { items as Items } from "../../items.js";
 import { Biomes, BiomeDescriptions } from "../config/constants.js";
 import { loadJsonFile, getIconPath, getBaseUrl } from "../utils/fileUtils.js";
+import { FoodService } from "./foodService.js";
 import { ItemService } from "./itemService.js";
 
 export class BiomeService {
@@ -17,7 +18,7 @@ export class BiomeService {
           const bosses = [];
 
           for (const [key, item] of Object.entries(Items)) {
-            const biomes = ItemService.getBiomes(item);
+            const biomes = ItemService.getBiomes(item, true);
 
             if (biomes.includes(biomeName)) {
               const iconUrl = await getIconPath(
@@ -28,7 +29,7 @@ export class BiomeService {
 
               if (item.faction === "Boss" || item.group === "semiboss") {
                 bosses.push({
-                  id: item.id,
+                  ...item,
                   name: enLang[item.id] || item.name || item.id,
                   icon: iconUrl,
                 });
@@ -64,8 +65,50 @@ export class BiomeService {
     };
   }
 
-  static async getBiomeByName(biomeName, req) {
+  static async getBiomeByName(biomeName, extended, req) {
     const allBiomes = await this.getBiomeData(req);
-    return allBiomes.biomes.find((biome) => biome.name === biomeName);
+
+    const biome = allBiomes.biomes.find((biome) => biome.name === biomeName);
+
+    if (!extended) return biome;
+
+    const biomeItems = await ItemService.getItemsByBiome(biomeName, true);
+
+    let creatures = await ItemService.getItemsByType("creatures");
+
+    creatures = await Promise.all(
+      Object.entries(creatures.itemsList)
+        .filter(([_, item]) => {
+          return Object.values(biomeItems.biomeItems).some(
+            (i) => i.id === item.id
+          );
+        })
+        .map(async ([_, item]) => {
+          return await ItemService.getItemDetails(item.id, req);
+        })
+    );
+
+    let resources = await ItemService.getItemsByType("resources");
+
+    resources = await Promise.all(
+      Object.entries(resources.itemsList)
+        .filter(([_, item]) => {
+          return Object.values(biomeItems.biomeItems).some(
+            (i) => i.id === item.id
+          );
+        })
+        .map(async ([_, item]) => {
+          return await ItemService.getItemDetails(item.id, req);
+        })
+    );
+
+    const food = await FoodService.getFoodData(req, { biome: biomeName });
+
+    return {
+      ...biome,
+      creatures,
+      resources,
+      food,
+    };
   }
 }

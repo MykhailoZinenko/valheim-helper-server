@@ -7280,6 +7280,7 @@ export const items = {
         biomeAreas: 2,
         distance: 10,
         radius: [40, 80],
+        killed: "SeekerQueen",
         envs: [],
         groupSize: [3, 3],
         groupRadius: 3,

@@ -10,7 +10,10 @@ import itemRoutes from "./routes/itemRoutes.js";
 import biomeRoutes from "./routes/biomeRoutes.js";
 import feedbackRoutes from "./routes/feedbackRoutes.js";
 import foodRoutes from "./routes/foodRoutes.js";
+import developerRoutes from "./routes/developerRoutes.js";
+import authRoutes from "./routes/authRoutes.js";
 import { errorHandler, notFound } from "./middleware/errorHandler.js";
+import { authenticate } from "./middleware/authMiddleware.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -37,11 +40,15 @@ app.get("/", (req, res) => {
   });
 });
 
+app.use("/api", authenticate);
+
 // API Routes
 app.use("/api/items", itemRoutes);
 app.use("/api/biomes", biomeRoutes);
 app.use("/api/feedback", feedbackRoutes);
 app.use("/api/food", foodRoutes);
+app.use("/api/developer", developerRoutes);
+app.use("/api/auth", authRoutes);
 
 // Error Handling
 app.use(notFound);

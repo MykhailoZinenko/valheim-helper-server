@@ -17,7 +17,7 @@ router.get("/", async (req, res, next) => {
 router.get("/:biomeName", async (req, res, next) => {
   try {
     const { biomeName } = req.params;
-    const biome = await BiomeService.getBiomeByName(biomeName, req);
+    const biome = await BiomeService.getBiomeByName(biomeName, true, req);
 
     if (!biome) {
       return res.status(404).json({ error: "Biome not found" });
