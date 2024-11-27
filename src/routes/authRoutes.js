@@ -26,7 +26,7 @@ router.post("/validate-session", async (req, res) => {
       userAgent: req.headers["user-agent"],
     });
 
-    res.json({ token: appToken });
+    res.json({ token: appToken, expires: Date.now() + TOKEN_LIFETIME });
   } catch (error) {
     console.error("Session validation error:", error);
     res.status(401).json({ error: "Invalid session" });

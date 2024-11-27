@@ -15,7 +15,7 @@ async function loadApiKeys() {
 
 const tokenLimiter = rateLimit({
   windowMs: TOKEN_LIFETIME,
-  max: 10,
+  max: 1000,
   keyGenerator: (req) => req.headers.authorization?.split(" ")[1],
 });
 

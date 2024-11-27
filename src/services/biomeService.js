@@ -90,19 +90,20 @@ export class BiomeService {
 
     let resources = await ItemService.getItemsByType("resources");
 
+    const food = await FoodService.getFoodData(req, { biome: biomeName });
+
     resources = await Promise.all(
       Object.entries(resources.itemsList)
         .filter(([_, item]) => {
-          return Object.values(biomeItems.biomeItems).some(
-            (i) => i.id === item.id
+          return (
+            !food.items.some((f) => f.id === item.id) &&
+            Object.values(biomeItems.biomeItems).some((i) => i.id === item.id)
           );
         })
         .map(async ([_, item]) => {
           return await ItemService.getItemDetails(item.id, req);
         })
     );
-
-    const food = await FoodService.getFoodData(req, { biome: biomeName });
 
     return {
       ...biome,
