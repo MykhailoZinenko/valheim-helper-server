@@ -51,3 +51,29 @@ export const BiomeDescriptions = {
     "Found off the coast in deep waters. Home to Leviathans and Sea Serpents.",
   DeepNorth: "Deep North biome of fir and pine trees with low level mobs.",
 };
+
+export const PLAN_TYPES = {
+  BASIC: "BASIC",
+  PRO: "PRO",
+};
+
+export const Plans = {
+  [PLAN_TYPES.BASIC]: {
+    name: "Basic",
+    allowedApiKeys: 3,
+    allowedPaths: ["*"],
+    rateLimit: 1000,
+    rateLimitWindow: 60 * 60 * 1000,
+    maxDataSize: 10 * 1024 * 1024,
+  },
+  [PLAN_TYPES.PRO]: {
+    name: "Pro",
+    allowedApiKeys: 5,
+    allowedPaths: ["*"],
+    rateLimit: 3,
+    rateLimitWindow: 60 * 60 * 1000,
+    maxDataSize: 100 * 1024 * 1024,
+  },
+};
+
+export const SUPPORT_EMAIL_ADDRESS = "valheim.helper.work@gmail.com";

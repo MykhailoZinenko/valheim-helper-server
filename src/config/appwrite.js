@@ -7,6 +7,7 @@ export const config = {
   databaseId: process.env.APPWRITE_DATABASE_ID,
   userCollectionId: process.env.APPWRITE_USER_COLLECTION_ID,
   apiKeysCollectionId: process.env.APPWRITE_API_KEYS_COLLECTION_ID,
+  usageCollectionId: process.env.APPWRITE_USAGE_COLLECTION_ID,
 };
 
 export const adminClient = new Client()
