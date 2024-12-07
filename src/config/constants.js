@@ -68,9 +68,9 @@ export const Plans = {
   },
   [PLAN_TYPES.PRO]: {
     name: "Pro",
-    allowedApiKeys: 5,
+    allowedApiKeys: 10,
     allowedPaths: ["*"],
-    rateLimit: 3,
+    rateLimit: 10000,
     rateLimitWindow: 60 * 60 * 1000,
     maxDataSize: 100 * 1024 * 1024,
   },

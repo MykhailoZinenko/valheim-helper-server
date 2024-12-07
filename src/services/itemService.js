@@ -64,7 +64,8 @@ export class ItemService {
     return {
       item: {
         ...item,
-        name: enLang[itemId] || item.name || itemId,
+        readableName: enLang[itemId] || item.name || itemId,
+        originalName: item.id,
         icon: iconUrl,
       },
       recipe: recipe || null,
@@ -92,7 +93,7 @@ export class ItemService {
 
           return {
             id: itemId,
-            name: enLang[itemId] || itemData.name || itemId,
+            readableName: enLang[itemId] || itemData.name || itemId,
             originalName: itemId,
             type: itemData.type,
             icon: iconUrl,
@@ -143,16 +144,18 @@ export class ItemService {
           const station = this.getStation(itemData);
 
           return {
-            id: itemId,
-            name: enLang[itemId] || itemData.name || itemId,
-            originalName: itemId,
-            type: itemData.type,
-            icon: iconUrl,
-            tier: itemData.tier,
-            biomes: biomes,
-            group: group,
-            station: station,
-            set: itemData.set,
+            item: {
+              id: itemId,
+              readableName: enLang[itemId] || itemData.name || itemId,
+              originalName: itemId,
+              type: itemData.type,
+              icon: iconUrl,
+              tier: itemData.tier,
+              biomes: biomes,
+              group: group,
+              station: station,
+              set: itemData.set,
+            },
             recipe: recipe || null,
           };
         })
@@ -164,42 +167,46 @@ export class ItemService {
     };
   }
 
-  static async getItemsByType(type) {
-    const typeIdentifier = dataCollections[type];
+  static async getItemsByType(typeIdentifier, req) {
+    const type = dataCollections[typeIdentifier];
 
-    if (!typeIdentifier) return null;
+    if (!type) return null;
 
-    const itemsList = Object.entries(Items)
-      .filter(([_, item]) => item.type === typeIdentifier && !item.mod)
-      .reduce((acc, [id, item]) => {
-        acc[id] = item;
-        return acc;
-      }, {});
+    const items = await Promise.all(
+      Object.entries(Items)
+        .filter(([_, item]) => item.type === type && !item.mod)
+        .map(async ([_, item]) => {
+          return await ItemService.getItemDetails(item.id, req);
+        })
+    );
 
     return {
-      type,
+      total: items.length,
       typeIdentifier,
-      itemsList,
+      type,
+      items,
     };
   }
 
-  static async getItemsByBiome(biome, initial = false) {
-    const biomeItems = Object.entries(Items)
-      .filter(([_, item]) => {
-        const biomes = this.getBiomes(item, initial);
+  static async getItemsByBiome(biome, req, initial = false) {
+    const items = await Promise.all(
+      Object.entries(Items)
+        .filter(([_, item]) => {
+          const biomes = this.getBiomes(item, initial);
 
-        if (!biomes || !biomes.length > 0) return false;
+          if (!biomes || !biomes.length > 0) return false;
 
-        return (biomes ?? []).includes(biome) && !item.mod;
-      })
-      .reduce((acc, [id, item]) => {
-        acc[id] = item;
-        return acc;
-      }, {});
+          return (biomes ?? []).includes(biome) && !item.mod;
+        })
+        .map(async ([_, item]) => {
+          return await ItemService.getItemDetails(item.id, req);
+        })
+    );
 
     return {
+      total: items.length,
       biome,
-      biomeItems,
+      items,
     };
   }
 }

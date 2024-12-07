@@ -47,7 +47,7 @@ router.get("/:itemId", async (req, res, next) => {
 router.get("/type/:type", async (req, res, next) => {
   try {
     const { type } = req.params;
-    const result = await ItemService.getItemsByType(type);
+    const result = await ItemService.getItemsByType(type, req);
 
     if (!result) {
       return res.status(404).json({ error: `Invalid type: ${type}` });

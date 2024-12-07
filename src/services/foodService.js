@@ -19,16 +19,18 @@ export class FoodService {
           const foodItem = await ItemService.getItemDetails(itemId, req);
 
           return {
-            id: itemId,
-            name: foodItem.item.name,
-            icon: foodItem.item.icon,
-            originalName: foodItem.item.originalName,
-            type: foodItem.item.type,
-            tier: foodItem.item.tier,
-            biomes: ItemService.getBiomes(foodItem.item),
-            group: foodItem.item.group,
-            station: ItemService.getStation(foodItem.item),
-            stats: { ...foodItem.item.Food },
+            item: {
+              id: itemId,
+              readableName: foodItem.item.readableName,
+              icon: foodItem.item.icon,
+              originalName: foodItem.item.originalName,
+              type: foodItem.item.type,
+              tier: foodItem.item.tier,
+              biomes: ItemService.getBiomes(foodItem.item),
+              group: foodItem.item.group,
+              station: ItemService.getStation(foodItem.item),
+              Food: { ...foodItem.item.Food },
+            },
             recipe: foodItem.recipe,
           };
         })

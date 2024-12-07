@@ -4,7 +4,6 @@ import cors from "cors";
 import compression from "compression";
 import bodyParser from "body-parser";
 import { fileURLToPath } from "url";
-
 import { bot } from "./config/telegram.js";
 import itemRoutes from "./routes/itemRoutes.js";
 import biomeRoutes from "./routes/biomeRoutes.js";
@@ -54,14 +53,50 @@ app.use("/api/auth", authRoutes);
 app.use(notFound);
 app.use(errorHandler);
 
-// Telegram Bot Setup
-bot
-  .launch()
-  .then(() => console.log("Telegram bot started"))
-  .catch((err) => console.error("Failed to start Telegram bot:", err));
+const initBot = async () => {
+  const isLocalEnvironment =
+    process.env.NODE_ENV === "development" ||
+    process.env.NODE_ENV === "local" ||
+    process.env.IS_LOCAL === "true";
 
-// Graceful shutdown
-process.once("SIGINT", () => bot.stop("SIGINT"));
-process.once("SIGTERM", () => bot.stop("SIGTERM"));
+  if (isLocalEnvironment) {
+    console.log("Skipping bot initialization in local environment");
+    return;
+  }
+
+  try {
+    const botInfo = await bot.telegram.getMe().catch(() => null);
+    if (!botInfo) {
+      console.log("Starting Telegram bot...");
+      await bot.launch();
+      console.log("Telegram bot successfully started");
+    } else {
+      console.log("Bot instance already running, skipping launch");
+    }
+  } catch (error) {
+    if (error.response?.error_code === 409) {
+      console.log(
+        "Conflict: Another bot instance is running. Skipping launch."
+      );
+    } else {
+      console.error("Failed to start Telegram bot:", error.message);
+    }
+  }
+};
+
+initBot();
+
+const gracefulShutdown = () => {
+  console.log("Received shutdown signal");
+  try {
+    bot.stop("SIGTERM");
+    console.log("Bot shutdown completed");
+  } catch (error) {
+    console.error("Error during bot shutdown:", error);
+  }
+};
+
+process.once("SIGINT", gracefulShutdown);
+process.once("SIGTERM", gracefulShutdown);
 
 export default app;

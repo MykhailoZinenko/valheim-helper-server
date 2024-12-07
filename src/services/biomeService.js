@@ -29,9 +29,12 @@ export class BiomeService {
 
               if (item.faction === "Boss" || item.group === "semiboss") {
                 bosses.push({
-                  ...item,
-                  name: enLang[item.id] || item.name || item.id,
-                  icon: iconUrl,
+                  item: {
+                    ...item,
+                    readableName: enLang[item.id] || item.name || item.id,
+                    icon: iconUrl,
+                  },
+                  recipe: null,
                 });
               }
             }
@@ -53,7 +56,10 @@ export class BiomeService {
             name: biomeName,
             description:
               BiomeDescriptions[biomeName] || "Description not available",
-            bosses: filteredBosses,
+            bosses: {
+              total: filteredBosses.length,
+              items: filteredBosses,
+            },
             imageUrl,
           };
         })
@@ -61,54 +67,51 @@ export class BiomeService {
 
     return {
       total: biomeData.length,
-      biomes: biomeData,
+      items: biomeData,
     };
   }
 
   static async getBiomeByName(biomeName, extended, req) {
     const allBiomes = await this.getBiomeData(req);
 
-    const biome = allBiomes.biomes.find((biome) => biome.name === biomeName);
+    const biome = allBiomes.items.find((biome) => biome.name === biomeName);
 
     if (!extended) return biome;
 
-    const biomeItems = await ItemService.getItemsByBiome(biomeName, true);
+    const biomeItems = await ItemService.getItemsByBiome(biomeName, req, true);
 
-    let creatures = await ItemService.getItemsByType("creatures");
+    let creatures = await ItemService.getItemsByType("creatures", req);
 
-    creatures = await Promise.all(
-      Object.entries(creatures.itemsList)
-        .filter(([_, item]) => {
-          return Object.values(biomeItems.biomeItems).some(
-            (i) => i.id === item.id
-          );
-        })
-        .map(async ([_, item]) => {
-          return await ItemService.getItemDetails(item.id, req);
-        })
-    );
+    creatures = creatures.items.filter((item) => {
+      return biomeItems.items.some((i) => {
+        return (
+          i.item.id === item.item.id &&
+          !biome.bosses.items.map((boss) => boss.item.id).includes(item.item.id)
+        );
+      });
+    });
 
-    let resources = await ItemService.getItemsByType("resources");
+    let resources = await ItemService.getItemsByType("resources", req);
 
     const food = await FoodService.getFoodData(req, { biome: biomeName });
 
-    resources = await Promise.all(
-      Object.entries(resources.itemsList)
-        .filter(([_, item]) => {
-          return (
-            !food.items.some((f) => f.id === item.id) &&
-            Object.values(biomeItems.biomeItems).some((i) => i.id === item.id)
-          );
-        })
-        .map(async ([_, item]) => {
-          return await ItemService.getItemDetails(item.id, req);
-        })
-    );
+    resources = resources.items.filter(({ item }) => {
+      return (
+        !food.items.some((f) => f.item.id === item.id) &&
+        biomeItems.items.some((i) => i.item.id === item.id)
+      );
+    });
 
     return {
       ...biome,
-      creatures,
-      resources,
+      creatures: {
+        total: creatures.length,
+        items: creatures,
+      },
+      resources: {
+        total: resources.length,
+        items: resources,
+      },
       food,
     };
   }
