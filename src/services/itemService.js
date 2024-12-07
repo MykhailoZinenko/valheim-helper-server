@@ -1,9 +1,12 @@
 import { items as Items } from "../../items.js";
 import { recipes as Recipes } from "../../recipes.js";
 import { Biomes, dataCollections } from "../config/constants.js";
-import { loadJsonFile, getIconPath } from "../utils/fileUtils.js";
+import { getIconPath } from "../utils/fileUtils.js";
+import { loadLanguageFile } from "../app.js";
 
 export class ItemService {
+  static itemDetailsCache = new Map();
+
   static getBiomes(item, initial = false) {
     let biomes = [];
 
@@ -49,11 +52,13 @@ export class ItemService {
   }
 
   static async getItemDetails(itemId, req) {
-    const enLang = await loadJsonFile("public/lang/en.json");
-    if (!enLang) {
-      throw new Error("Language files could not be loaded");
+    // Check cache first
+    const cacheKey = `${itemId}-${req.baseUrl}`;
+    if (this.itemDetailsCache.has(cacheKey)) {
+      return this.itemDetailsCache.get(cacheKey);
     }
 
+    const enLang = await loadLanguageFile();
     const item = Items[itemId];
 
     if (!item || item?.mod) return null;
@@ -61,7 +66,7 @@ export class ItemService {
     const recipe = Recipes.find((recipe) => recipe.item === itemId);
     const iconUrl = await getIconPath(req, item.type, item.iconId || itemId);
 
-    return {
+    const result = {
       item: {
         ...item,
         readableName: enLang[itemId] || item.name || itemId,
@@ -70,10 +75,14 @@ export class ItemService {
       },
       recipe: recipe || null,
     };
+
+    // Cache the result
+    this.itemDetailsCache.set(cacheKey, result);
+    return result;
   }
 
   static async getAllItems(req) {
-    const enLang = await loadJsonFile("public/lang/en.json");
+    const enLang = await loadLanguageFile();
     if (!enLang) {
       throw new Error("Language files could not be loaded");
     }
@@ -112,7 +121,7 @@ export class ItemService {
   }
 
   static async getCalculatorItems(req) {
-    const enLang = await loadJsonFile("public/lang/en.json");
+    const enLang = await loadLanguageFile();
     if (!enLang) {
       throw new Error("Language files could not be loaded");
     }

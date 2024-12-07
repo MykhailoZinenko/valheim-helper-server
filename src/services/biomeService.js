@@ -1,12 +1,13 @@
 import { items as Items } from "../../items.js";
+import { loadLanguageFile } from "../app.js";
 import { Biomes, BiomeDescriptions } from "../config/constants.js";
-import { loadJsonFile, getIconPath, getBaseUrl } from "../utils/fileUtils.js";
+import { getIconPath, getBaseUrl } from "../utils/fileUtils.js";
 import { FoodService } from "./foodService.js";
 import { ItemService } from "./itemService.js";
 
 export class BiomeService {
   static async getBiomeData(req) {
-    const enLang = await loadJsonFile("public/lang/en.json");
+    const enLang = await loadLanguageFile();
     if (!enLang) {
       throw new Error("Language files could not be loaded");
     }
@@ -73,44 +74,44 @@ export class BiomeService {
 
   static async getBiomeByName(biomeName, extended, req) {
     const allBiomes = await this.getBiomeData(req);
-
     const biome = allBiomes.items.find((biome) => biome.name === biomeName);
 
     if (!extended) return biome;
+    if (!biome) return null;
 
-    const biomeItems = await ItemService.getItemsByBiome(biomeName, req, true);
+    // Create indexes for faster lookups
+    const biomeItemsResult = await ItemService.getItemsByBiome(
+      biomeName,
+      req,
+      true
+    );
+    const biomeItemIds = new Set(biomeItemsResult.items.map((i) => i.item.id));
+    const bossIds = new Set(biome.bosses.items.map((boss) => boss.item.id));
 
-    let creatures = await ItemService.getItemsByType("creatures", req);
+    // Get creatures with optimized filtering
+    const creatures = await ItemService.getItemsByType("creatures", req);
+    const filteredCreatures = creatures.items.filter(
+      (item) => biomeItemIds.has(item.item.id) && !bossIds.has(item.item.id)
+    );
 
-    creatures = creatures.items.filter((item) => {
-      return biomeItems.items.some((i) => {
-        return (
-          i.item.id === item.item.id &&
-          !biome.bosses.items.map((boss) => boss.item.id).includes(item.item.id)
-        );
-      });
-    });
-
-    let resources = await ItemService.getItemsByType("resources", req);
-
+    // Get resources with optimized filtering
+    const resources = await ItemService.getItemsByType("resources", req);
     const food = await FoodService.getFoodData(req, { biome: biomeName });
+    const foodIds = new Set(food.items.map((f) => f.item.id));
 
-    resources = resources.items.filter(({ item }) => {
-      return (
-        !food.items.some((f) => f.item.id === item.id) &&
-        biomeItems.items.some((i) => i.item.id === item.id)
-      );
-    });
+    const filteredResources = resources.items.filter(
+      ({ item }) => !foodIds.has(item.id) && biomeItemIds.has(item.id)
+    );
 
     return {
       ...biome,
       creatures: {
-        total: creatures.length,
-        items: creatures,
+        total: filteredCreatures.length,
+        items: filteredCreatures,
       },
       resources: {
-        total: resources.length,
-        items: resources,
+        total: filteredResources.length,
+        items: filteredResources,
       },
       food,
     };

@@ -13,9 +13,20 @@ import developerRoutes from "./routes/developerRoutes.js";
 import authRoutes from "./routes/authRoutes.js";
 import { errorHandler, notFound } from "./middleware/errorHandler.js";
 import { authenticate } from "./middleware/authMiddleware.js";
+import { items } from "../items.js";
+import { loadJsonFile } from "./utils/fileUtils.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+let langCache = null;
+
+export async function loadLanguageFile() {
+  if (!langCache) {
+    langCache = await loadJsonFile("public/lang/en.json");
+  }
+  return langCache;
+}
 
 const app = express();
 
@@ -24,6 +35,8 @@ app.use(compression());
 app.use(bodyParser.json());
 app.use(cors());
 app.use("/public", express.static(path.join(__dirname, "../public")));
+
+console.log(Object.values(items).length);
 
 // Routes
 app.get("/", (req, res) => {
