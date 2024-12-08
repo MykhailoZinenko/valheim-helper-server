@@ -3,11 +3,17 @@ import { recipes as Recipes } from "../../recipes.js";
 import { Biomes, dataCollections } from "../config/constants.js";
 import { getIconPath } from "../utils/fileUtils.js";
 import { loadLanguageFile } from "../app.js";
+import globalCache from "../utils/cacheManager.js";
 
 export class ItemService {
-  static itemDetailsCache = new Map();
+  // Pre-compute recipe lookup map
+  static recipeMap = new Map(Recipes.map((recipe) => [recipe.item, recipe]));
 
   static getBiomes(item, initial = false) {
+    const cacheKey = `biomes_${item.id}_${initial}`;
+    const cached = globalCache.get(cacheKey);
+    if (cached) return cached;
+
     let biomes = [];
 
     if (item.spawners) {
@@ -25,14 +31,13 @@ export class ItemService {
 
     if (biomes.length === 0) {
       let highestBiome = -1;
-      const recipe = Recipes.find((recipe) => recipe.item === item.id);
+      const recipe = this.recipeMap.get(item.id);
 
       if (recipe) {
         for (let key in recipe.materials) {
           const material = Items[key];
           if (material) {
-            highestBiome =
-              highestBiome < material.tier ? material.tier : highestBiome;
+            highestBiome = Math.max(highestBiome, material.tier);
           }
         }
         if (highestBiome !== -1) {
@@ -42,29 +47,37 @@ export class ItemService {
         biomes = [Biomes[item.tier]];
       }
     }
+
+    globalCache.set(cacheKey, biomes, 3600); // Cache for 1 hour
     return biomes;
   }
 
   static getStation(item) {
-    if (item.recipe) return item.recipe.station;
-    const recipe = Recipes.find((recipe) => recipe.item === item.id);
-    return recipe && recipe.source ? recipe.source.station : "";
+    const cacheKey = `station_${item.id}`;
+    const cached = globalCache.get(cacheKey);
+    if (cached) return cached;
+
+    const station =
+      item.recipe?.station ||
+      this.recipeMap.get(item.id)?.source?.station ||
+      "";
+
+    globalCache.set(cacheKey, station, 3600);
+    return station;
   }
 
   static async getItemDetails(itemId, req) {
-    // Check cache first
-    const cacheKey = `${itemId}-${req.baseUrl}`;
-    if (this.itemDetailsCache.has(cacheKey)) {
-      return this.itemDetailsCache.get(cacheKey);
-    }
+    const cacheKey = `item_details_${itemId}`;
+    const cached = globalCache.get(cacheKey);
+    if (cached) return cached;
 
-    const enLang = await loadLanguageFile();
+    const [enLang, iconUrl] = await Promise.all([
+      loadLanguageFile(),
+      getIconPath(req, Items[itemId]?.type, Items[itemId]?.iconId || itemId),
+    ]);
+
     const item = Items[itemId];
-
     if (!item || item?.mod) return null;
-
-    const recipe = Recipes.find((recipe) => recipe.item === itemId);
-    const iconUrl = await getIconPath(req, item.type, item.iconId || itemId);
 
     const result = {
       item: {
@@ -73,32 +86,40 @@ export class ItemService {
         originalName: item.id,
         icon: iconUrl,
       },
-      recipe: recipe || null,
+      recipe: this.recipeMap.get(itemId) || null,
     };
 
-    // Cache the result
-    this.itemDetailsCache.set(cacheKey, result);
+    globalCache.set(cacheKey, result, 3600);
     return result;
   }
 
   static async getAllItems(req) {
+    const cacheKey = `all_items`;
+    const cached = globalCache.get(cacheKey);
+    if (cached) return cached;
+
     const enLang = await loadLanguageFile();
     if (!enLang) {
       throw new Error("Language files could not be loaded");
     }
 
-    const itemsList = await Promise.all(
-      Object.entries(Items)
-        .filter(([_, item]) => !item.mod)
-        .map(async ([itemId, itemData]) => {
+    // Pre-filter valid items
+    const validItems = Object.entries(Items).filter(([_, item]) => !item.mod);
+
+    // Process items in batches to avoid memory pressure
+    const batchSize = 50;
+    const itemsList = [];
+
+    for (let i = 0; i < validItems.length; i += batchSize) {
+      const batch = validItems.slice(i, i + batchSize);
+      const batchResults = await Promise.all(
+        batch.map(async ([itemId, itemData]) => {
           const iconUrl = await getIconPath(
             req,
             itemData.type,
             itemData.iconId || itemId
           );
           const biomes = this.getBiomes(itemData);
-          const group = itemData.group || "";
-          const station = this.getStation(itemData);
 
           return {
             id: itemId,
@@ -107,50 +128,59 @@ export class ItemService {
             type: itemData.type,
             icon: iconUrl,
             tier: itemData.tier,
-            biomes: biomes,
-            group: group,
-            station: station,
+            biomes,
+            group: itemData.group || "",
+            station: this.getStation(itemData),
           };
         })
-    );
+      );
+      itemsList.push(...batchResults);
+    }
 
-    return {
+    const result = {
       total: itemsList.length,
       items: itemsList,
     };
+
+    globalCache.set(cacheKey, result, 1800); // Cache for 30 minutes
+    return result;
   }
 
   static async getCalculatorItems(req) {
+    const cacheKey = `calculator_items`;
+    const cached = globalCache.get(cacheKey);
+    if (cached) return cached;
+
     const enLang = await loadLanguageFile();
     if (!enLang) {
       throw new Error("Language files could not be loaded");
     }
 
-    const itemsList = await Promise.all(
-      Object.entries(Items)
-        .filter(
-          ([_, item]) =>
-            !item.mod &&
-            !(
-              item.type === "piece" ||
-              item.type === "creature" ||
-              item.type === "object" ||
-              item.type === "spawner" ||
-              item.type === "effect" ||
-              item.type === "fish"
-            ) &&
-            !item.Food
-        )
-        .map(async ([itemId, itemData]) => {
-          const iconUrl = await getIconPath(
-            req,
-            itemData.type,
-            itemData.iconId || itemId
-          );
-          const recipe = Recipes.find((recipe) => recipe.item === itemId);
-          const biomes = this.getBiomes(itemData);
-          const group = itemData.group || "";
-          const station = this.getStation(itemData);
+    const excludedTypes = new Set([
+      "piece",
+      "creature",
+      "object",
+      "spawner",
+      "effect",
+      "fish",
+    ]);
+
+    const validItems = Object.entries(Items).filter(
+      ([_, item]) => !item.mod && !excludedTypes.has(item.type) && !item.Food
+    );
+
+    // Process items in batches
+    const batchSize = 50;
+    const itemsList = [];
+
+    for (let i = 0; i < validItems.length; i += batchSize) {
+      const batch = validItems.slice(i, i + batchSize);
+      const batchResults = await Promise.all(
+        batch.map(async ([itemId, itemData]) => {
+          const [iconUrl, biomes] = await Promise.all([
+            getIconPath(req, itemData.type, itemData.iconId || itemId),
+            Promise.resolve(this.getBiomes(itemData)),
+          ]);
 
           return {
             item: {
@@ -160,62 +190,76 @@ export class ItemService {
               type: itemData.type,
               icon: iconUrl,
               tier: itemData.tier,
-              biomes: biomes,
-              group: group,
-              station: station,
+              biomes,
+              group: itemData.group || "",
+              station: this.getStation(itemData),
               set: itemData.set,
             },
-            recipe: recipe || null,
+            recipe: this.recipeMap.get(itemId) || null,
           };
         })
-    );
+      );
+      itemsList.push(...batchResults);
+    }
 
-    return {
+    const result = {
       total: itemsList.length,
       items: itemsList,
     };
+
+    globalCache.set(cacheKey, result, 1800);
+    return result;
   }
 
   static async getItemsByType(typeIdentifier, req) {
-    const type = dataCollections[typeIdentifier];
+    const cacheKey = `items_by_type_${typeIdentifier}`;
+    const cached = globalCache.get(cacheKey);
+    if (cached) return cached;
 
+    const type = dataCollections[typeIdentifier];
     if (!type) return null;
 
-    const items = await Promise.all(
-      Object.entries(Items)
-        .filter(([_, item]) => item.type === type && !item.mod)
-        .map(async ([_, item]) => {
-          return await ItemService.getItemDetails(item.id, req);
-        })
+    const validItems = Object.values(Items).filter(
+      (item) => item.type === type && !item.mod
     );
 
-    return {
+    const items = await Promise.all(
+      validItems.map((item) => this.getItemDetails(item.id, req))
+    );
+
+    const result = {
       total: items.length,
       typeIdentifier,
       type,
       items,
     };
+
+    globalCache.set(cacheKey, result, 1800);
+    return result;
   }
 
   static async getItemsByBiome(biome, req, initial = false) {
+    const cacheKey = `items_by_biome_${biome}_${initial}`;
+    const cached = globalCache.get(cacheKey);
+    if (cached) return cached;
+
+    // Pre-filter items by biome
+    const validItems = Object.values(Items).filter((item) => {
+      const biomes = this.getBiomes(item, initial);
+      return biomes?.includes(biome) && !item.mod;
+    });
+
     const items = await Promise.all(
-      Object.entries(Items)
-        .filter(([_, item]) => {
-          const biomes = this.getBiomes(item, initial);
-
-          if (!biomes || !biomes.length > 0) return false;
-
-          return (biomes ?? []).includes(biome) && !item.mod;
-        })
-        .map(async ([_, item]) => {
-          return await ItemService.getItemDetails(item.id, req);
-        })
+      validItems.map((item) => this.getItemDetails(item.id, req))
     );
 
-    return {
+    const result = {
       total: items.length,
       biome,
       items,
     };
+
+    globalCache.set(cacheKey, result, 1800);
+    return result;
   }
 }

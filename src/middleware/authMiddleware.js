@@ -1,7 +1,6 @@
 import { config, databases } from "../config/appwrite.js";
 import rateLimit from "express-rate-limit";
 import UsageTracker from "../services/usageService.js";
-import { Query } from "node-appwrite";
 import { PLAN_TYPES, Plans } from "../config/constants.js";
 
 const PUBLIC_PATHS = [
@@ -9,20 +8,17 @@ const PUBLIC_PATHS = [
   "/developer/keys/*",
   "/auth/validate-session",
   "/",
-  ,
 ];
 
 const TOKEN_LIFETIME = 60 * 1000;
 
-// Convert wildcard pattern to regex pattern
 const wildcardToRegex = (pattern) => {
   const escapedPattern = pattern
-    .replace(/[.*+?^${}()|[\]\\]/g, "\\$&") // Escape special regex characters
-    .replace(/\\\*/g, ".*"); // Replace escaped * with .*
+    .replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+    .replace(/\\\*/g, ".*");
   return new RegExp(`^${escapedPattern}$`);
 };
 
-// Check if a path matches any of the public paths
 const isValidPath = (requestPath, paths) => {
   return paths.some((pattern) => {
     if (pattern.includes("*")) {
