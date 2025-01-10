@@ -53,7 +53,7 @@ const validateApiKey = async (apiKey) => {
   try {
     const apiKeys = (await loadApiKeys()) || {};
     return apiKeys.some((userData) => userData.key === apiKey)
-      ? apiKeys.find((key) => key.key === apiKey)
+      ? apiKeys.find((key) => key.key === apiKey && key.status === "active")
       : false;
   } catch (error) {
     console.error("Error validating API key:", error);
